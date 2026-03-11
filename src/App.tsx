@@ -66,8 +66,8 @@ export default function App() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [currentDatasetId, setCurrentDatasetId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('general');
-  const [webAppUrl, setWebAppUrl] = useState<string>('https://script.google.com/macros/s/AKfycbxQznwzrmaZve6pfqFHdbe7ummu9F7B65AYlPH2qptYIr9kgJ9qMpvUAvlUHvJWwa_V/exec');
-  const [tempUrl, setTempUrl] = useState('https://script.google.com/macros/s/AKfycbxQznwzrmaZve6pfqFHdbe7ummu9F7B65AYlPH2qptYIr9kgJ9qMpvUAvlUHvJWwa_V/exec');
+  const [webAppUrl, setWebAppUrl] = useState<string>('https://script.google.com/macros/s/AKfycbwLDChDwf9m17IqnwbmzryVIHIluvQNIA9eMpOKAQlviz-QwnGw7gFf8hFosfdxkhNu/exec');
+  const [tempUrl, setTempUrl] = useState('https://script.google.com/macros/s/AKfycbwLDChDwf9m17IqnwbmzryVIHIluvQNIA9eMpOKAQlviz-QwnGw7gFf8hFosfdxkhNu/exec');
   const [showSettings, setShowSettings] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -79,11 +79,29 @@ export default function App() {
   const isFirstLoad = useRef(true);
   const latestDatasets = useRef<Dataset[]>([]);
   const lastSavedDatasets = useRef<Dataset[]>([]);
+  const latestUsers = useRef<User[]>([]);
+  const lastSavedUsers = useRef<User[]>([]);
+  const latestActivityLogs = useRef<ActivityLog[]>([]);
+  const lastSavedActivityLogs = useRef<ActivityLog[]>([]);
+  const latestNotifications = useRef<any[]>([]);
+  const lastSavedNotifications = useRef<any[]>([]);
   const isSaving = useRef(false);
 
   useEffect(() => {
     latestDatasets.current = datasets;
   }, [datasets]);
+
+  useEffect(() => {
+    latestUsers.current = users;
+  }, [users]);
+
+  useEffect(() => {
+    latestActivityLogs.current = activityLogs;
+  }, [activityLogs]);
+
+  useEffect(() => {
+    latestNotifications.current = notifications;
+  }, [notifications]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -107,10 +125,11 @@ export default function App() {
     }
 
     const savedUrl = localStorage.getItem('googleSheetWebAppUrl');
-    const defaultUrl = 'https://script.google.com/macros/s/AKfycbxQznwzrmaZve6pfqFHdbe7ummu9F7B65AYlPH2qptYIr9kgJ9qMpvUAvlUHvJWwa_V/exec';
-    const oldUrl = 'https://script.google.com/macros/s/AKfycbwS47HhdtHsHPqw-Hx7RjvPIUwMVDqq7qwfGbahvrouQgmWzQWQX-kGzVgFr91wEWUx/exec';
+    const defaultUrl = 'https://script.google.com/macros/s/AKfycbwLDChDwf9m17IqnwbmzryVIHIluvQNIA9eMpOKAQlviz-QwnGw7gFf8hFosfdxkhNu/exec';
+    const oldUrl1 = 'https://script.google.com/macros/s/AKfycbwS47HhdtHsHPqw-Hx7RjvPIUwMVDqq7qwfGbahvrouQgmWzQWQX-kGzVgFr91wEWUx/exec';
+    const oldUrl2 = 'https://script.google.com/macros/s/AKfycbxQznwzrmaZve6pfqFHdbe7ummu9F7B65AYlPH2qptYIr9kgJ9qMpvUAvlUHvJWwa_V/exec';
     
-    if (savedUrl && savedUrl !== oldUrl) {
+    if (savedUrl && savedUrl !== oldUrl1 && savedUrl !== oldUrl2) {
       setWebAppUrl(savedUrl);
       setTempUrl(savedUrl);
       loadData(savedUrl);
@@ -133,7 +152,7 @@ export default function App() {
           // Handle legacy data or new datasets array
           if (Array.isArray(result.data.datasets)) {
             setDatasets(result.data.datasets);
-          } else {
+          } else if (result.data.generalInfo) {
             // Legacy data conversion
             setDatasets([{
               id: 'legacy-1',
@@ -146,6 +165,19 @@ export default function App() {
               status: 'not_started',
               data: result.data
             }]);
+          }
+
+          if (Array.isArray(result.data.users)) {
+            setUsers(result.data.users);
+            localStorage.setItem('appUsers', JSON.stringify(result.data.users));
+          }
+          if (Array.isArray(result.data.activityLogs)) {
+            setActivityLogs(result.data.activityLogs);
+            localStorage.setItem('activityLogs', JSON.stringify(result.data.activityLogs));
+          }
+          if (Array.isArray(result.data.notifications)) {
+            setNotifications(result.data.notifications);
+            localStorage.setItem('adminNotifications', JSON.stringify(result.data.notifications));
           }
         }
         setIsDataLoaded(true);
@@ -170,16 +202,28 @@ export default function App() {
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
       lastSavedDatasets.current = latestDatasets.current;
+      lastSavedUsers.current = latestUsers.current;
+      lastSavedActivityLogs.current = latestActivityLogs.current;
+      lastSavedNotifications.current = latestNotifications.current;
     }
 
     const saveInterval = setInterval(async () => {
       if (isSaving.current) return;
-      if (latestDatasets.current === lastSavedDatasets.current) return;
+      
+      const hasDatasetsChanged = latestDatasets.current !== lastSavedDatasets.current;
+      const hasUsersChanged = latestUsers.current !== lastSavedUsers.current;
+      const hasLogsChanged = latestActivityLogs.current !== lastSavedActivityLogs.current;
+      const hasNotificationsChanged = latestNotifications.current !== lastSavedNotifications.current;
+
+      if (!hasDatasetsChanged && !hasUsersChanged && !hasLogsChanged && !hasNotificationsChanged) return;
 
       isSaving.current = true;
       setSyncStatus('saving');
       
       const dataToSave = latestDatasets.current;
+      const usersToSave = latestUsers.current;
+      const logsToSave = latestActivityLogs.current;
+      const notificationsToSave = latestNotifications.current;
       
       try {
         const response = await fetch(webAppUrl, {
@@ -187,7 +231,12 @@ export default function App() {
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
-          body: JSON.stringify({ datasets: dataToSave }),
+          body: JSON.stringify({ 
+            datasets: dataToSave,
+            users: usersToSave,
+            activityLogs: logsToSave,
+            notifications: notificationsToSave
+          }),
         });
 
         const text = await response.text();
@@ -195,6 +244,9 @@ export default function App() {
           const result = JSON.parse(text);
           if (result.status === 'success') {
             lastSavedDatasets.current = dataToSave;
+            lastSavedUsers.current = usersToSave;
+            lastSavedActivityLogs.current = logsToSave;
+            lastSavedNotifications.current = notificationsToSave;
             setSyncStatus('saved');
           } else {
             throw new Error(result.message);
