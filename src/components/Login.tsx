@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, User as UserIcon, LogIn, UserPlus, ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, ArrowLeft, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { User } from '../types';
 
 interface LoginProps {
   onLogin: (user: User) => void;
   users: User[];
   onRegister: (user: User) => void;
+  isLoading?: boolean;
 }
 
-export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
+export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister, isLoading = false }) => {
   const [view, setView] = useState<'login' | 'register' | 'pending'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -164,9 +165,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="block w-full pl-11 pr-4 py-3.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  className="block w-full pl-11 pr-4 py-3.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50 disabled:text-gray-500"
                   placeholder="ชื่อ-นามสกุล"
                   required
+                  disabled={isLoading}
                 />
               </div>
             )}
@@ -179,9 +181,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="block w-full pl-11 pr-4 py-3.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                className="block w-full pl-11 pr-4 py-3.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50 disabled:text-gray-500"
                 placeholder="ชื่อผู้ใช้ (Username)"
                 required
+                disabled={isLoading}
               />
             </div>
             
@@ -193,9 +196,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full pl-11 pr-4 py-3.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                className="block w-full pl-11 pr-4 py-3.5 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50 disabled:text-gray-500"
                 placeholder="รหัสผ่าน (Password)"
                 required
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -210,6 +214,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  disabled={isLoading}
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-600">
                   จดจำรหัสผ่าน
@@ -220,9 +225,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
 
           <button
             type="submit"
-            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:-translate-y-0.5"
+            disabled={isLoading}
+            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:-translate-y-0"
           >
-            {view === 'login' ? (
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                กำลังโหลดข้อมูล...
+              </>
+            ) : view === 'login' ? (
               <>
                 <LogIn className="w-5 h-5 mr-2" />
                 เข้าสู่ระบบ

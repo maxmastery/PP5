@@ -526,7 +526,7 @@ export default function App() {
     logActivity(`แก้ไขข้อมูลผู้ใช้งาน: ${users.find(u => u.id === userId)?.name}`);
   };
 
-  const handleRegister = (newUser: User) => {
+  const handleRegister = async (newUser: User) => {
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
     localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
@@ -543,10 +543,35 @@ export default function App() {
     const updatedNotifications = [...notifications, newNotification];
     setNotifications(updatedNotifications);
     localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));
+
+    // Force immediate save to server
+    if (webAppUrl && isDataLoaded) {
+      setSyncStatus('saving');
+      try {
+        await fetch(webAppUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: JSON.stringify({ 
+            datasets: latestDatasets.current,
+            users: updatedUsers,
+            activityLogs: latestActivityLogs.current,
+            notifications: updatedNotifications
+          }),
+        });
+        lastSavedUsers.current = updatedUsers;
+        lastSavedNotifications.current = updatedNotifications;
+        setSyncStatus('saved');
+      } catch (error) {
+        console.error('Immediate save failed:', error);
+        setSyncStatus('error');
+      }
+    }
   };
 
   if (!currentUser) {
-    return <Login onLogin={handleLogin} users={users} onRegister={handleRegister} />;
+    return <Login onLogin={handleLogin} users={users} onRegister={handleRegister} isLoading={!isDataLoaded || syncStatus === 'loading'} />;
   }
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
