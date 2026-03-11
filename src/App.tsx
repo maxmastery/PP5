@@ -13,7 +13,7 @@ import { Instructions2Form } from './components/Instructions2Form';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { exportToExcel } from './utils/excelExport';
-import { Download, FileSpreadsheet, Settings, X, Cloud, CloudOff, CloudUpload, CheckCircle2, AlertCircle, Loader2, LogOut, ArrowLeft, User as UserIcon, Clock, Pencil, Trash2 } from 'lucide-react';
+import { Download, FileSpreadsheet, Settings, X, Cloud, CloudOff, CloudUpload, CheckCircle2, AlertCircle, Loader2, LogOut, ArrowLeft, User as UserIcon, Clock, Pencil, Trash2, RefreshCw } from 'lucide-react';
 
 const initialData: AppData = {
   generalInfo: {
@@ -112,6 +112,18 @@ export default function App() {
     const savedUsers = localStorage.getItem('appUsers');
     if (savedUsers) {
       setUsers(JSON.parse(savedUsers));
+    } else {
+      const admin: User = {
+        id: 'admin-1',
+        name: 'ผู้ดูแลระบบหลัก',
+        username: 'admin',
+        password: '@Admin123456',
+        status: 'approved',
+        role: 'admin',
+        createdAt: new Date().toISOString()
+      };
+      setUsers([admin]);
+      localStorage.setItem('appUsers', JSON.stringify([admin]));
     }
 
     const savedLogs = localStorage.getItem('activityLogs');
@@ -514,8 +526,27 @@ export default function App() {
     logActivity(`แก้ไขข้อมูลผู้ใช้งาน: ${users.find(u => u.id === userId)?.name}`);
   };
 
+  const handleRegister = (newUser: User) => {
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
+    
+    const newNotification = {
+      id: Date.now().toString(),
+      type: 'user_registration',
+      userId: newUser.id,
+      userName: newUser.name,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    
+    const updatedNotifications = [...notifications, newNotification];
+    setNotifications(updatedNotifications);
+    localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));
+  };
+
   if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} users={users} onRegister={handleRegister} />;
   }
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
@@ -589,6 +620,7 @@ export default function App() {
           onSelectDataset={setCurrentDatasetId}
           onLogout={handleLogout}
           onSettings={() => setShowSettings(true)}
+          onRefresh={() => loadData(webAppUrl)}
           currentUser={currentUser}
           unreadNotifications={unreadNotifications}
         />
@@ -981,6 +1013,9 @@ export default function App() {
                 {currentUser.name.charAt(0)}
               </div>
               <span className="text-sm font-medium text-gray-700 mr-4">{currentUser.name}</span>
+              <button onClick={() => loadData(webAppUrl)} className="text-gray-500 hover:text-blue-600 transition-colors mr-3 relative" title="รีเฟรชข้อมูล">
+                <RefreshCw className="w-4 h-4" />
+              </button>
               {currentUser.role === 'admin' && (
                 <button onClick={() => setShowSettings(true)} className="text-gray-500 hover:text-indigo-600 transition-colors mr-3 relative" title="ตั้งค่าระบบ">
                   <Settings className="w-4 h-4" />

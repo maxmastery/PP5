@@ -4,38 +4,20 @@ import { User } from '../types';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  users: User[];
+  onRegister: (user: User) => void;
 }
 
-export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+export const Login: React.FC<LoginProps> = ({ onLogin, users, onRegister }) => {
   const [view, setView] = useState<'login' | 'register' | 'pending'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [users, setUsers] = useState<User[]>([]);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Load users from localStorage for demo/initial purposes
-  // In a real app, this would come from the Google Sheet backend
+  // Load remembered user from localStorage
   useEffect(() => {
-    const savedUsers = localStorage.getItem('appUsers');
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    } else {
-      // Default admin
-      const admin: User = {
-        id: 'admin-1',
-        name: 'ผู้ดูแลระบบหลัก',
-        username: 'admin',
-        password: '@Admin123456',
-        status: 'approved',
-        role: 'admin',
-        createdAt: new Date().toISOString()
-      };
-      setUsers([admin]);
-      localStorage.setItem('appUsers', JSON.stringify([admin]));
-    }
-
     const remembered = localStorage.getItem('rememberedUser');
     if (remembered) {
       try {
@@ -93,22 +75,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       createdAt: new Date().toISOString()
     };
 
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
-    
-    // Notify Super Admin (simulated via localStorage for now)
-    const notifications = JSON.parse(localStorage.getItem('adminNotifications') || '[]');
-    notifications.push({
-      id: Date.now().toString(),
-      type: 'user_registration',
-      userId: newUser.id,
-      userName: newUser.name,
-      timestamp: new Date().toISOString(),
-      read: false
-    });
-    localStorage.setItem('adminNotifications', JSON.stringify(notifications));
-
+    onRegister(newUser);
     setView('pending');
   };
 

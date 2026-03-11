@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Dataset, User } from '../types';
-import { Plus, Trash2, Edit2, Search, Filter, MoreVertical, CheckCircle2, Circle, Clock, ArrowLeft, RotateCcw, Settings, LogOut, X, User as UserIcon } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, Filter, MoreVertical, CheckCircle2, Circle, Clock, ArrowLeft, RotateCcw, Settings, LogOut, X, User as UserIcon, RefreshCw } from 'lucide-react';
 
 interface DashboardProps {
   datasets: Dataset[];
@@ -12,6 +12,7 @@ interface DashboardProps {
   onSelectDataset: (id: string) => void;
   onLogout: () => void;
   onSettings: () => void;
+  onRefresh: () => void;
   currentUser: User;
   unreadNotifications: number;
 }
@@ -26,6 +27,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectDataset,
   onLogout,
   onSettings,
+  onRefresh,
   currentUser,
   unreadNotifications,
 }) => {
@@ -230,6 +232,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {currentUser.name.charAt(0)}
               </div>
               <span className="text-sm font-medium text-gray-700 mr-4">{currentUser.name}</span>
+              <button onClick={onRefresh} className="text-gray-500 hover:text-blue-600 transition-colors mr-3 relative" title="รีเฟรชข้อมูล">
+                <RefreshCw className="w-4 h-4" />
+              </button>
               {currentUser.role === 'admin' && (
                 <button onClick={onSettings} className="text-gray-500 hover:text-indigo-600 transition-colors mr-3 relative" title="ตั้งค่าระบบ">
                   <Settings className="w-4 h-4" />
