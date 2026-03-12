@@ -49,7 +49,25 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
         
         // Ensure total hours match currentHoursPerWeek
         const sumHours = savedSchedule.reduce((acc, curr) => acc + curr.hours, 0);
-        if (sumHours !== currentHoursPerWeek) {
+        
+        // Remove duplicate days
+        const uniqueDays = new Set();
+        savedSchedule = savedSchedule.filter(s => {
+          if (uniqueDays.has(s.dayOfWeek)) return false;
+          uniqueDays.add(s.dayOfWeek);
+          return true;
+        });
+        
+        // If we removed duplicates, we might need to add new days
+        while (savedSchedule.length < savedDaysPerWeek) {
+          let nextDay = 1;
+          while (uniqueDays.has(nextDay) && nextDay <= 5) nextDay++;
+          if (nextDay > 5) nextDay = 1;
+          savedSchedule.push({ dayOfWeek: nextDay, hours: 1 });
+          uniqueDays.add(nextDay);
+        }
+
+        if (sumHours !== currentHoursPerWeek || savedSchedule.length !== savedDaysPerWeek) {
           savedSchedule = savedSchedule.map(s => ({ ...s }));
           // Reset hours to distribute currentHoursPerWeek
           for (let i = 0; i < savedSchedule.length - 1; i++) {

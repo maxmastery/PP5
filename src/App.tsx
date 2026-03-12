@@ -94,10 +94,11 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [activeAdminTab, setActiveAdminTab] = useState<'database' | 'approvals' | 'users' | 'logs'>('database');
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxGUSGGIojZOshOxgghBAQoA5WCcd_zvI7ULgaVDK66lCi0BmPSqz5s_kGHSz5BZ0Ha/exec';
   const [currentDatasetId, setCurrentDatasetId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('general');
-  const [webAppUrl, setWebAppUrl] = useState<string>('https://script.google.com/macros/s/AKfycbwLDChDwf9m17IqnwbmzryVIHIluvQNIA9eMpOKAQlviz-QwnGw7gFf8hFosfdxkhNu/exec');
-  const [tempUrl, setTempUrl] = useState('https://script.google.com/macros/s/AKfycbwLDChDwf9m17IqnwbmzryVIHIluvQNIA9eMpOKAQlviz-QwnGw7gFf8hFosfdxkhNu/exec');
+  const [webAppUrl, setWebAppUrl] = useState<string>(GOOGLE_SHEET_URL);
+  const [tempUrl, setTempUrl] = useState(GOOGLE_SHEET_URL);
   const [showSettings, setShowSettings] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -116,6 +117,11 @@ export default function App() {
   const latestNotifications = useRef<any[]>([]);
   const lastSavedNotifications = useRef<any[]>([]);
   const isSaving = useRef(false);
+
+  // Initialize lastSaved from localStorage if available
+  useEffect(() => {
+    // Removed localStorage reads to force using Google Sheet as single source of truth
+  }, []);
 
   useEffect(() => {
     latestDatasets.current = datasets;
@@ -139,48 +145,8 @@ export default function App() {
       setCurrentUser(JSON.parse(savedUser));
     }
     
-    const savedUsers = localStorage.getItem('appUsers');
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    } else {
-      const admin: User = {
-        id: 'admin-1',
-        name: 'ผู้ดูแลระบบหลัก',
-        username: 'admin',
-        password: '@Admin123456',
-        status: 'approved',
-        role: 'admin',
-        createdAt: new Date().toISOString()
-      };
-      setUsers([admin]);
-      localStorage.setItem('appUsers', JSON.stringify([admin]));
-    }
-
-    const savedLogs = localStorage.getItem('activityLogs');
-    if (savedLogs) {
-      setActivityLogs(JSON.parse(savedLogs));
-    }
-
-    const savedNotifications = localStorage.getItem('adminNotifications');
-    if (savedNotifications) {
-      setNotifications(JSON.parse(savedNotifications));
-    }
-
-    const savedUrl = localStorage.getItem('googleSheetWebAppUrl');
-    const defaultUrl = 'https://script.google.com/macros/s/AKfycbwLDChDwf9m17IqnwbmzryVIHIluvQNIA9eMpOKAQlviz-QwnGw7gFf8hFosfdxkhNu/exec';
-    const oldUrl1 = 'https://script.google.com/macros/s/AKfycbwS47HhdtHsHPqw-Hx7RjvPIUwMVDqq7qwfGbahvrouQgmWzQWQX-kGzVgFr91wEWUx/exec';
-    const oldUrl2 = 'https://script.google.com/macros/s/AKfycbxQznwzrmaZve6pfqFHdbe7ummu9F7B65AYlPH2qptYIr9kgJ9qMpvUAvlUHvJWwa_V/exec';
-    
-    if (savedUrl && savedUrl !== oldUrl1 && savedUrl !== oldUrl2) {
-      setWebAppUrl(savedUrl);
-      setTempUrl(savedUrl);
-      loadData(savedUrl);
-    } else {
-      localStorage.setItem('googleSheetWebAppUrl', defaultUrl);
-      setWebAppUrl(defaultUrl);
-      setTempUrl(defaultUrl);
-      loadData(defaultUrl);
-    }
+    // Always load from the hardcoded URL
+    loadData(GOOGLE_SHEET_URL);
   }, []);
 
   const loadData = async (url: string) => {
@@ -194,9 +160,11 @@ export default function App() {
           // Handle legacy data or new datasets array
           if (Array.isArray(result.data.datasets)) {
             setDatasets(result.data.datasets);
+            latestDatasets.current = result.data.datasets;
+            lastSavedDatasets.current = result.data.datasets;
           } else if (result.data.generalInfo) {
             // Legacy data conversion
-            setDatasets([{
+            const legacyDataset = {
               id: 'legacy-1',
               name: 'ข้อมูลเดิม',
               academicYear: result.data.generalInfo?.academicYear || '2568',
@@ -204,22 +172,28 @@ export default function App() {
               subjectName: result.data.generalInfo?.subjectName || '',
               learningArea: result.data.generalInfo?.learningArea || '',
               gradeLevel: result.data.generalInfo?.gradeLevel || '',
-              status: 'not_started',
+              status: 'not_started' as const,
               data: result.data
-            }]);
+            };
+            setDatasets([legacyDataset]);
+            latestDatasets.current = [legacyDataset];
+            lastSavedDatasets.current = [legacyDataset];
           }
 
           if (Array.isArray(result.data.users)) {
             setUsers(result.data.users);
-            localStorage.setItem('appUsers', JSON.stringify(result.data.users));
+            latestUsers.current = result.data.users;
+            lastSavedUsers.current = result.data.users;
           }
           if (Array.isArray(result.data.activityLogs)) {
             setActivityLogs(result.data.activityLogs);
-            localStorage.setItem('activityLogs', JSON.stringify(result.data.activityLogs));
+            latestActivityLogs.current = result.data.activityLogs;
+            lastSavedActivityLogs.current = result.data.activityLogs;
           }
           if (Array.isArray(result.data.notifications)) {
             setNotifications(result.data.notifications);
-            localStorage.setItem('adminNotifications', JSON.stringify(result.data.notifications));
+            latestNotifications.current = result.data.notifications;
+            lastSavedNotifications.current = result.data.notifications;
           }
         }
         setIsDataLoaded(true);
@@ -243,10 +217,8 @@ export default function App() {
 
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
-      lastSavedDatasets.current = latestDatasets.current;
-      lastSavedUsers.current = latestUsers.current;
-      lastSavedActivityLogs.current = latestActivityLogs.current;
-      lastSavedNotifications.current = latestNotifications.current;
+      // We don't overwrite lastSavedDatasets here anymore, because it's handled in loadData
+      // and initialized from localStorage.
     }
 
     const saveInterval = setInterval(async () => {
@@ -307,18 +279,19 @@ export default function App() {
           const result = JSON.parse(text);
           if (result.status === 'success') {
             // 4. Update local state with merged data
+            setDatasets(mergedDatasets);
+            latestDatasets.current = mergedDatasets;
+            setUsers(mergedUsers);
+            latestUsers.current = mergedUsers;
+            setActivityLogs(mergedLogs);
+            latestActivityLogs.current = mergedLogs;
+            setNotifications(mergedNotifs);
+            latestNotifications.current = mergedNotifs;
+
             lastSavedDatasets.current = mergedDatasets;
             lastSavedUsers.current = mergedUsers;
             lastSavedActivityLogs.current = mergedLogs;
             lastSavedNotifications.current = mergedNotifs;
-            
-            // Only update React state if there were actual server changes we didn't have
-            // to avoid unnecessary re-renders or cursor jumping.
-            // For simplicity and safety, we update state.
-            setDatasets(mergedDatasets);
-            setUsers(mergedUsers);
-            setActivityLogs(mergedLogs);
-            setNotifications(mergedNotifs);
 
             setSyncStatus('saved');
           } else {
@@ -428,7 +401,6 @@ export default function App() {
     };
     const updatedLogs = [newLog, ...activityLogs];
     setActivityLogs(updatedLogs);
-    localStorage.setItem('activityLogs', JSON.stringify(updatedLogs));
   };
 
   const handleLogin = (user: User) => {
@@ -585,11 +557,9 @@ export default function App() {
   const handleApproveUser = (userId: string) => {
     const updatedUsers = users.map(u => u.id === userId ? { ...u, status: 'approved' as const } : u);
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     
     const updatedNotifications = notifications.map(n => n.userId === userId ? { ...n, read: true } : n);
     setNotifications(updatedNotifications);
-    localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));
     
     logActivity(`อนุมัติผู้ใช้งาน: ${users.find(u => u.id === userId)?.name}`);
   };
@@ -597,11 +567,9 @@ export default function App() {
   const handleRejectUser = (userId: string) => {
     const updatedUsers = users.map(u => u.id === userId ? { ...u, status: 'rejected' as const } : u);
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     
     const updatedNotifications = notifications.map(n => n.userId === userId ? { ...n, read: true } : n);
     setNotifications(updatedNotifications);
-    localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));
 
     logActivity(`ปฏิเสธผู้ใช้งาน: ${users.find(u => u.id === userId)?.name}`);
   };
@@ -609,14 +577,12 @@ export default function App() {
   const handleUpdateUser = (userId: string, updates: Partial<User>) => {
     const updatedUsers = users.map(u => u.id === userId ? { ...u, ...updates } : u);
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     logActivity(`แก้ไขข้อมูลผู้ใช้งาน: ${users.find(u => u.id === userId)?.name}`);
   };
 
   const handleRegister = async (newUser: User) => {
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     
     const newNotification = {
       id: Date.now().toString(),
@@ -629,10 +595,14 @@ export default function App() {
     
     const updatedNotifications = [...notifications, newNotification];
     setNotifications(updatedNotifications);
-    localStorage.setItem('adminNotifications', JSON.stringify(updatedNotifications));
 
     // Force immediate save to server
     if (webAppUrl && isDataLoaded) {
+      if (isSaving.current) {
+        // If already saving, just let the interval pick up the new user
+        return;
+      }
+      isSaving.current = true;
       setSyncStatus('saving');
       try {
         // 1. Fetch latest from server
@@ -668,15 +638,19 @@ export default function App() {
         const text = await response.text();
         const result = JSON.parse(text);
         if (result.status === 'success') {
+          setDatasets(mergedDatasets);
+          latestDatasets.current = mergedDatasets;
+          setUsers(mergedUsers);
+          latestUsers.current = mergedUsers;
+          setActivityLogs(mergedLogs);
+          latestActivityLogs.current = mergedLogs;
+          setNotifications(mergedNotifs);
+          latestNotifications.current = mergedNotifs;
+
           lastSavedDatasets.current = mergedDatasets;
           lastSavedUsers.current = mergedUsers;
           lastSavedActivityLogs.current = mergedLogs;
           lastSavedNotifications.current = mergedNotifs;
-          
-          setDatasets(mergedDatasets);
-          setUsers(mergedUsers);
-          setActivityLogs(mergedLogs);
-          setNotifications(mergedNotifs);
           
           setSyncStatus('saved');
         } else {
@@ -685,6 +659,8 @@ export default function App() {
       } catch (error) {
         console.error('Immediate save failed:', error);
         setSyncStatus('error');
+      } finally {
+        isSaving.current = false;
       }
     }
   };
@@ -715,7 +691,6 @@ export default function App() {
     };
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     logActivity(`เพิ่มผู้ใช้งานใหม่: ${newUser.name}`);
     setShowAddUserModal(false);
     setNewUserForm({ name: '', username: '', password: '' });
@@ -732,7 +707,6 @@ export default function App() {
     
     const updatedUsers = users.map(u => u.id === editingUser.id ? editingUser : u);
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     logActivity(`แก้ไขข้อมูลผู้ใช้งาน: ${editingUser.name}`);
     setShowEditUserModal(false);
     setEditingUser(null);
@@ -742,7 +716,6 @@ export default function App() {
     if (window.confirm(`คุณต้องการลบผู้ใช้งาน "${user.name}" ใช่หรือไม่?`)) {
       const updatedUsers = users.filter(u => u.id !== user.id);
       setUsers(updatedUsers);
-      localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
       logActivity(`ลบผู้ใช้งาน: ${user.name}`);
     }
   };

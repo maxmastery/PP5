@@ -19,7 +19,7 @@ export const ScoresForm: React.FC<Props> = ({ students, data, generalInfo, score
   const [showAutoFillModal, setShowAutoFillModal] = useState(false);
 
   const handleChange = (studentId: string, field: string, value: string) => {
-    const numValue = parseFloat(value) || 0;
+    const numValue = value === '' ? '' : (parseFloat(value) || 0);
     onChange({
       ...data,
       [studentId]: {
@@ -264,8 +264,8 @@ export const ScoresForm: React.FC<Props> = ({ students, data, generalInfo, score
               {students.length > 0 ? students.map((student, index) => {
                 const score = data[student.id] || {};
                 const betweenTermTotal = calculateStudentTotal(student.id);
-                const midterm = score.midterm || 0;
-                const final = score.final || 0;
+                const midterm = Number(score.midterm) || 0;
+                const final = Number(score.final) || 0;
                 const total = betweenTermTotal + midterm + final;
                 
                 return (
