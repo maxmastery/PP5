@@ -472,6 +472,32 @@ export default function App() {
     logActivity(`สร้างชุดข้อมูลใหม่: ${newDataset.subjectName} ${newDataset.gradeLevel}`);
   };
 
+  const handleDuplicateDataset = (id: string, newMetadata: { learningArea: string, subjectName: string, gradeLevel: string, headOfLearningArea: string }) => {
+    const sourceDataset = datasets.find(d => d.id === id);
+    if (!sourceDataset) return;
+
+    const newDataset: Dataset = {
+      ...sourceDataset,
+      id: Date.now().toString(),
+      learningArea: newMetadata.learningArea,
+      subjectName: newMetadata.subjectName,
+      gradeLevel: newMetadata.gradeLevel,
+      data: {
+        ...sourceDataset.data,
+        generalInfo: {
+          ...sourceDataset.data.generalInfo,
+          learningArea: newMetadata.learningArea,
+          subjectName: newMetadata.subjectName,
+          gradeLevel: newMetadata.gradeLevel,
+          headOfLearningArea: newMetadata.headOfLearningArea
+        }
+      }
+    };
+
+    setDatasets(prev => [newDataset, ...prev]);
+    logActivity(`ทำสำเนาชุดข้อมูล: ${newMetadata.subjectName} ${newMetadata.gradeLevel}`);
+  };
+
   const handleEditDataset = (id: string, updates: Partial<Dataset>) => {
     setDatasets(prev => prev.map(d => {
       if (d.id === id) {
@@ -732,6 +758,7 @@ export default function App() {
           datasets={visibleDatasets}
           onAddDataset={handleAddDataset}
           onEditDataset={handleEditDataset}
+          onDuplicateDataset={handleDuplicateDataset}
           onDeleteDataset={handleDeleteDataset}
           onRestoreDataset={handleRestoreDataset}
           onPermanentDelete={handlePermanentDelete}

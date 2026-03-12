@@ -38,6 +38,10 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
 
   useEffect(() => {
     if (showEditModal) {
+      // Sync hoursPerWeek from generalInfo
+      const initialHours = parseInt(generalInfo.hoursPerWeek) || 1;
+      setHoursPerWeek(initialHours);
+
       if (!startDate && !endDate) {
         const yearStr = generalInfo.academicYear || new Date().getFullYear().toString();
         // Convert Buddhist year to Gregorian if needed (assuming > 2500 is Buddhist)

@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Dataset, User } from '../types';
-import { Plus, Trash2, Edit2, Search, Filter, MoreVertical, CheckCircle2, Circle, Clock, ArrowLeft, RotateCcw, Settings, LogOut, X, User as UserIcon, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, Filter, MoreVertical, CheckCircle2, Circle, Clock, ArrowLeft, RotateCcw, Settings, LogOut, X, User as UserIcon, RefreshCw, Copy } from 'lucide-react';
 
 interface DashboardProps {
   datasets: Dataset[];
   onAddDataset: (dataset: Omit<Dataset, 'id' | 'data' | 'deletedAt' | 'userId'>) => void;
   onEditDataset: (id: string, updates: Partial<Dataset>) => void;
+  onDuplicateDataset: (id: string, newMetadata: { learningArea: string, subjectName: string, gradeLevel: string, headOfLearningArea: string }) => void;
   onDeleteDataset: (ids: string[]) => void;
   onRestoreDataset: (ids: string[]) => void;
   onPermanentDelete: (ids: string[]) => void;
@@ -21,6 +22,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   datasets,
   onAddDataset,
   onEditDataset,
+  onDuplicateDataset,
   onDeleteDataset,
   onRestoreDataset,
   onPermanentDelete,
@@ -41,6 +43,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [editingDatasetId, setEditingDatasetId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditConfirm, setShowEditConfirm] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateSourceId, setDuplicateSourceId] = useState<string | null>(null);
+  const [duplicateError, setDuplicateError] = useState('');
+  const [duplicateDataset, setDuplicateDataset] = useState({
+    learningArea: '',
+    subjectName: '',
+    grade: '',
+    room: ''
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 100;
 
@@ -88,6 +99,81 @@ export const Dashboard: React.FC<DashboardProps> = ({
     'ศิลปะ': ['ทัศนศิลป์', 'ดนตรี', 'นาฏศิลป์'],
     'การงานอาชีพ': ['การงานอาชีพ', 'คอมพิวเตอร์', 'พื้นฐานอาชีพ'],
     'ภาษาต่างประเทศ': ['ภาษาอังกฤษพื้นฐาน', 'ภาษาอังกฤษเพิ่มเติม', 'ภาษาจีน', 'ภาษาญี่ปุ่น']
+  };
+
+  const getHeadOfLearningArea = (area: string, subject: string) => {
+    let head = '';
+    switch (area) {
+      case 'ภาษาไทย': head = 'นางสาวพรชิตา ภูแสงสั่น'; break;
+      case 'คณิตศาสตร์': head = 'นางสาวราตรี ภูจอมแก้ว'; break;
+      case 'วิทยาศาสตร์และเทคโนโลยี': 
+        head = subject === 'สวนพฤกษศาสตร์' ? 'นางสาวพิรยา คำปัน' : 'นางสาววันวิสา พลหมอ'; 
+        break;
+      case 'สังคมศึกษา ศาสนา และวัฒนธรรม': head = 'นายบุญเลิศ อังคเนตร'; break;
+      case 'สุขศึกษาและพลศึกษา': head = 'นายทนงเดช วงษ์ประจันต์'; break;
+      case 'ศิลปะ': head = 'นายวสันต์ วอแพง'; break;
+      case 'ภาษาต่างประเทศ': head = 'นางสาวพรนิภา สว่างศรี'; break;
+      case 'การงานอาชีพ': head = 'นางสาวสุภาพร ญาณประเสริฐ'; break;
+    }
+    return head;
+  };
+
+  const handleDuplicateClick = (dataset: Dataset) => {
+    setDuplicateSourceId(dataset.id);
+    const [grade, room] = dataset.gradeLevel.split('/');
+    setDuplicateDataset({
+      learningArea: dataset.learningArea,
+      subjectName: dataset.subjectName,
+      grade: grade || 'ม.3',
+      room: room || '1'
+    });
+    setDuplicateError('');
+    setShowDuplicateModal(true);
+  };
+
+  const handleDuplicateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const sourceDataset = datasets.find(d => d.id === duplicateSourceId);
+    if (!sourceDataset || !duplicateSourceId) return;
+
+    const newGradeLevel = `${duplicateDataset.grade}/${duplicateDataset.room}`;
+    
+    // Check if at least one of the 3 fields changed
+    if (
+      duplicateDataset.learningArea === sourceDataset.learningArea &&
+      duplicateDataset.subjectName === sourceDataset.subjectName &&
+      newGradeLevel === sourceDataset.gradeLevel
+    ) {
+      setDuplicateError('กรุณาเปลี่ยนแปลงข้อมูลอย่างน้อย 1 อย่าง (กลุ่มสาระ, รายวิชา หรือ ระดับชั้น)');
+      return;
+    }
+
+    // Check for duplicates
+    const isDuplicate = datasets.some(d => 
+      !d.deletedAt && 
+      d.userId === currentUser.id &&
+      d.learningArea === duplicateDataset.learningArea &&
+      d.subjectName === duplicateDataset.subjectName &&
+      d.gradeLevel === newGradeLevel &&
+      d.academicYear === sourceDataset.academicYear &&
+      d.semester === sourceDataset.semester
+    );
+
+    if (isDuplicate) {
+      setDuplicateError('มีข้อมูลชุดนี้อยู่แล้วในระบบ');
+      return;
+    }
+
+    const headOfLearningArea = getHeadOfLearningArea(duplicateDataset.learningArea, duplicateDataset.subjectName);
+
+    onDuplicateDataset(duplicateSourceId, {
+      learningArea: duplicateDataset.learningArea,
+      subjectName: duplicateDataset.subjectName,
+      gradeLevel: newGradeLevel,
+      headOfLearningArea
+    });
+    
+    setShowDuplicateModal(false);
   };
 
   const activeDatasets = datasets.filter(d => !d.deletedAt);
@@ -378,6 +464,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <th className="py-4 px-4 font-medium">รายวิชา</th>
                   <th className="py-4 px-4 font-medium text-center">จำนวนนักเรียน</th>
                   <th className="py-4 px-4 font-medium">สถานะ</th>
+                  <th className="py-4 px-4 font-medium text-center">สำเนา</th>
                   <th className="py-4 px-6 font-medium text-right">จัดการ</th>
                 </tr>
               </thead>
@@ -442,6 +529,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <div className="w-2 h-2 rounded-full bg-current opacity-50"></div>
                           </div>
                         </div>
+                      </td>
+                      <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        {!isTrashView && (
+                          <button 
+                            onClick={() => handleDuplicateClick(dataset)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors border border-green-200"
+                            title="ทำสำเนาข้อมูลชุดนี้"
+                          >
+                            <Copy className="w-4 h-4" />
+                            สำเนา
+                          </button>
+                        )}
                       </td>
                       <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                         {!isTrashView && (
@@ -798,6 +897,121 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   className="px-5 py-2.5 bg-blue-950 text-white rounded-xl font-medium hover:bg-blue-900 transition-colors shadow-md"
                 >
                   บันทึกการแก้ไข
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate Modal */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-green-600 px-6 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <Copy className="w-5 h-5" />
+                </div>
+                <h2 className="text-xl font-bold">ทำสำเนาข้อมูล</h2>
+              </div>
+              <button 
+                onClick={() => setShowDuplicateModal(false)}
+                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleDuplicateSubmit} className="p-6 space-y-4">
+              {duplicateError && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100 flex items-center gap-2">
+                  <Circle className="w-4 h-4 fill-current" />
+                  {duplicateError}
+                </div>
+              )}
+              
+              <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm mb-4 border border-blue-100">
+                กรุณาเปลี่ยนแปลงข้อมูลอย่างน้อย 1 อย่าง (กลุ่มสาระ, รายวิชา หรือ ระดับชั้น) เพื่อไม่ให้ข้อมูลซ้ำกัน
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">กลุ่มสาระการเรียนรู้</label>
+                <select 
+                  required
+                  value={duplicateDataset.learningArea}
+                  onChange={e => setDuplicateDataset({...duplicateDataset, learningArea: e.target.value, subjectName: subjectsByArea[e.target.value]?.[0] || ''})}
+                  className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                >
+                  {learningAreas.map(area => (
+                    <option key={area} value={area}>{area}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รายวิชา</label>
+                <select 
+                  required
+                  value={duplicateDataset.subjectName}
+                  onChange={e => setDuplicateDataset({...duplicateDataset, subjectName: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                >
+                  <option value="">เลือกรายวิชา</option>
+                  {subjectsByArea[duplicateDataset.learningArea]?.map(subject => (
+                    <option key={subject} value={subject}>{subject}</option>
+                  ))}
+                  <option value="other">อื่นๆ (ระบุเอง)</option>
+                </select>
+                {duplicateDataset.subjectName === 'other' && (
+                  <input 
+                    type="text" 
+                    required
+                    className="mt-2 w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    placeholder="ระบุชื่อวิชา"
+                    onChange={e => setDuplicateDataset({...duplicateDataset, subjectName: e.target.value})}
+                  />
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ระดับชั้น</label>
+                  <select 
+                    required
+                    value={duplicateDataset.grade}
+                    onChange={e => setDuplicateDataset({...duplicateDataset, grade: e.target.value})}
+                    className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                  >
+                    <option value="ม.3">ม.3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ห้องที่</label>
+                  <select 
+                    required
+                    value={duplicateDataset.room}
+                    onChange={e => setDuplicateDataset({...duplicateDataset, room: e.target.value})}
+                    className="w-full border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                  >
+                    {[1, 2, 3, 4, 5].map(room => (
+                      <option key={room} value={room}>{room}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="pt-4 flex justify-end gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowDuplicateModal(false)}
+                  className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit"
+                  className="px-5 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl font-medium transition-colors shadow-sm"
+                >
+                  ยืนยันการทำสำเนา
                 </button>
               </div>
             </form>
