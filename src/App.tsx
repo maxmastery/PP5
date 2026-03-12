@@ -45,6 +45,36 @@ const initialData: AppData = {
   indicators: [],
 };
 
+// Smart Merge function to prevent data loss from concurrent edits
+function mergeEntities<T extends { id: string }>(
+  local: T[],
+  saved: T[],
+  server: T[]
+): T[] {
+  if (local === saved) return server;
+
+  const modified = local.filter(lItem => {
+    const sItem = saved.find(s => s.id === lItem.id);
+    return !sItem || JSON.stringify(lItem) !== JSON.stringify(sItem);
+  });
+  
+  const deletedIds = saved.filter(s => !local.find(l => l.id === s.id)).map(s => s.id);
+
+  let merged = [...server];
+  merged = merged.filter(item => !deletedIds.includes(item.id));
+  
+  modified.forEach(mItem => {
+    const index = merged.findIndex(item => item.id === mItem.id);
+    if (index >= 0) {
+      merged[index] = mItem;
+    } else {
+      merged.push(mItem);
+    }
+  });
+
+  return merged;
+}
+
 const tabs = [
   { id: 'general', label: 'ปก' },
   { id: 'students', label: 'ชื่อ+เวลา1+เวลา2' },
@@ -222,32 +252,53 @@ export default function App() {
     const saveInterval = setInterval(async () => {
       if (isSaving.current) return;
       
-      const hasDatasetsChanged = latestDatasets.current !== lastSavedDatasets.current;
-      const hasUsersChanged = latestUsers.current !== lastSavedUsers.current;
-      const hasLogsChanged = latestActivityLogs.current !== lastSavedActivityLogs.current;
-      const hasNotificationsChanged = latestNotifications.current !== lastSavedNotifications.current;
+      const localDatasets = latestDatasets.current;
+      const savedDatasets = lastSavedDatasets.current;
+      const localUsers = latestUsers.current;
+      const savedUsers = lastSavedUsers.current;
+      const localLogs = latestActivityLogs.current;
+      const savedLogs = lastSavedActivityLogs.current;
+      const localNotifs = latestNotifications.current;
+      const savedNotifs = lastSavedNotifications.current;
+
+      const hasDatasetsChanged = localDatasets !== savedDatasets;
+      const hasUsersChanged = localUsers !== savedUsers;
+      const hasLogsChanged = localLogs !== savedLogs;
+      const hasNotificationsChanged = localNotifs !== savedNotifs;
 
       if (!hasDatasetsChanged && !hasUsersChanged && !hasLogsChanged && !hasNotificationsChanged) return;
 
       isSaving.current = true;
       setSyncStatus('saving');
       
-      const dataToSave = latestDatasets.current;
-      const usersToSave = latestUsers.current;
-      const logsToSave = latestActivityLogs.current;
-      const notificationsToSave = latestNotifications.current;
-      
       try {
+        // 1. Fetch latest from server
+        const fetchResponse = await fetch(webAppUrl);
+        const fetchText = await fetchResponse.text();
+        const serverData = JSON.parse(fetchText).data;
+
+        const serverDatasets = Array.isArray(serverData.datasets) ? serverData.datasets : [];
+        const serverUsers = Array.isArray(serverData.users) ? serverData.users : [];
+        const serverLogs = Array.isArray(serverData.activityLogs) ? serverData.activityLogs : [];
+        const serverNotifs = Array.isArray(serverData.notifications) ? serverData.notifications : [];
+
+        // 2. Smart Merge
+        const mergedDatasets = mergeEntities(localDatasets, savedDatasets, serverDatasets);
+        const mergedUsers = mergeEntities(localUsers, savedUsers, serverUsers);
+        const mergedLogs = mergeEntities(localLogs, savedLogs, serverLogs);
+        const mergedNotifs = mergeEntities(localNotifs, savedNotifs, serverNotifs);
+
+        // 3. Save to server
         const response = await fetch(webAppUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
           body: JSON.stringify({ 
-            datasets: dataToSave,
-            users: usersToSave,
-            activityLogs: logsToSave,
-            notifications: notificationsToSave
+            datasets: mergedDatasets,
+            users: mergedUsers,
+            activityLogs: mergedLogs,
+            notifications: mergedNotifs
           }),
         });
 
@@ -255,10 +306,20 @@ export default function App() {
         try {
           const result = JSON.parse(text);
           if (result.status === 'success') {
-            lastSavedDatasets.current = dataToSave;
-            lastSavedUsers.current = usersToSave;
-            lastSavedActivityLogs.current = logsToSave;
-            lastSavedNotifications.current = notificationsToSave;
+            // 4. Update local state with merged data
+            lastSavedDatasets.current = mergedDatasets;
+            lastSavedUsers.current = mergedUsers;
+            lastSavedActivityLogs.current = mergedLogs;
+            lastSavedNotifications.current = mergedNotifs;
+            
+            // Only update React state if there were actual server changes we didn't have
+            // to avoid unnecessary re-renders or cursor jumping.
+            // For simplicity and safety, we update state.
+            setDatasets(mergedDatasets);
+            setUsers(mergedUsers);
+            setActivityLogs(mergedLogs);
+            setNotifications(mergedNotifs);
+
             setSyncStatus('saved');
           } else {
             throw new Error(result.message);
@@ -548,21 +609,53 @@ export default function App() {
     if (webAppUrl && isDataLoaded) {
       setSyncStatus('saving');
       try {
-        await fetch(webAppUrl, {
+        // 1. Fetch latest from server
+        const fetchResponse = await fetch(webAppUrl);
+        const fetchText = await fetchResponse.text();
+        const serverData = JSON.parse(fetchText).data;
+
+        const serverDatasets = Array.isArray(serverData.datasets) ? serverData.datasets : [];
+        const serverUsers = Array.isArray(serverData.users) ? serverData.users : [];
+        const serverLogs = Array.isArray(serverData.activityLogs) ? serverData.activityLogs : [];
+        const serverNotifs = Array.isArray(serverData.notifications) ? serverData.notifications : [];
+
+        // 2. Smart Merge
+        const mergedDatasets = mergeEntities(latestDatasets.current, lastSavedDatasets.current, serverDatasets);
+        const mergedUsers = mergeEntities(updatedUsers, lastSavedUsers.current, serverUsers);
+        const mergedLogs = mergeEntities(latestActivityLogs.current, lastSavedActivityLogs.current, serverLogs);
+        const mergedNotifs = mergeEntities(updatedNotifications, lastSavedNotifications.current, serverNotifs);
+
+        // 3. Save to server
+        const response = await fetch(webAppUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
           body: JSON.stringify({ 
-            datasets: latestDatasets.current,
-            users: updatedUsers,
-            activityLogs: latestActivityLogs.current,
-            notifications: updatedNotifications
+            datasets: mergedDatasets,
+            users: mergedUsers,
+            activityLogs: mergedLogs,
+            notifications: mergedNotifs
           }),
         });
-        lastSavedUsers.current = updatedUsers;
-        lastSavedNotifications.current = updatedNotifications;
-        setSyncStatus('saved');
+
+        const text = await response.text();
+        const result = JSON.parse(text);
+        if (result.status === 'success') {
+          lastSavedDatasets.current = mergedDatasets;
+          lastSavedUsers.current = mergedUsers;
+          lastSavedActivityLogs.current = mergedLogs;
+          lastSavedNotifications.current = mergedNotifs;
+          
+          setDatasets(mergedDatasets);
+          setUsers(mergedUsers);
+          setActivityLogs(mergedLogs);
+          setNotifications(mergedNotifs);
+          
+          setSyncStatus('saved');
+        } else {
+          throw new Error(result.message);
+        }
       } catch (error) {
         console.error('Immediate save failed:', error);
         setSyncStatus('error');
