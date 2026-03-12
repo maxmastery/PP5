@@ -18,7 +18,6 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
   const [newStudent, setNewStudent] = useState({ number: '', studentId: '', citizenId: '', name: '' });
   const [daysPerWeek, setDaysPerWeek] = useState(1);
   const [schedule, setSchedule] = useState([{ dayOfWeek: 1, hours: 1 }]);
-  const [hoursPerWeek, setHoursPerWeek] = useState(1);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -33,16 +32,40 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
     onConfirm: () => {}
   });
 
-  const currentHoursPerWeek = attendance?.settings?.hoursPerWeek || parseInt(generalInfo.hoursPerWeek) || 1;
+  const currentHoursPerWeek = parseInt(generalInfo.totalHours) || 1;
   const currentTotalHours = currentHoursPerWeek * 20;
 
   useEffect(() => {
     if (showEditModal) {
-      // Sync hoursPerWeek from generalInfo
-      const initialHours = parseInt(generalInfo.hoursPerWeek) || 1;
-      setHoursPerWeek(initialHours);
+      if (attendance?.settings) {
+        let savedDaysPerWeek = attendance.settings.daysPerWeek || 1;
+        let savedSchedule = attendance.settings.schedule || [{ dayOfWeek: 1, hours: 1 }];
+        
+        // Ensure daysPerWeek doesn't exceed currentHoursPerWeek
+        if (savedDaysPerWeek > currentHoursPerWeek) {
+          savedDaysPerWeek = currentHoursPerWeek;
+          savedSchedule = savedSchedule.slice(0, savedDaysPerWeek);
+        }
+        
+        // Ensure total hours match currentHoursPerWeek
+        const sumHours = savedSchedule.reduce((acc, curr) => acc + curr.hours, 0);
+        if (sumHours !== currentHoursPerWeek) {
+          savedSchedule = savedSchedule.map(s => ({ ...s }));
+          // Reset hours to distribute currentHoursPerWeek
+          for (let i = 0; i < savedSchedule.length - 1; i++) {
+            savedSchedule[i].hours = 1;
+          }
+          const sumOthers = savedSchedule.slice(0, -1).reduce((acc, curr) => acc + curr.hours, 0);
+          savedSchedule[savedSchedule.length - 1].hours = Math.max(1, currentHoursPerWeek - sumOthers);
+        }
 
-      if (!startDate && !endDate) {
+        setDaysPerWeek(savedDaysPerWeek);
+        setSchedule(savedSchedule);
+        setStartDate(attendance.settings.startDate || '');
+        setEndDate(attendance.settings.endDate || '');
+      }
+
+      if (!attendance?.settings?.startDate && !attendance?.settings?.endDate) {
         const yearStr = generalInfo.academicYear || new Date().getFullYear().toString();
         // Convert Buddhist year to Gregorian if needed (assuming > 2500 is Buddhist)
         const yearNum = parseInt(yearStr);
@@ -57,7 +80,7 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
         }
       }
     }
-  }, [showEditModal, generalInfo.semester, generalInfo.academicYear, startDate, endDate]);
+  }, [showEditModal, attendance?.settings, generalInfo.semester, generalInfo.academicYear]);
 
   const getHoursFromText = (text: string) => {
     if (!text) return 0;
@@ -205,7 +228,7 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
     
     const start = parseDate(startDate);
     const end = parseDate(endDate);
-    const totalHoursNeeded = hoursPerWeek * 20;
+    const totalHoursNeeded = currentHoursPerWeek * 20;
     
     let currentHour = 1;
     const newHoursMap: Record<string, string> = {};
@@ -314,7 +337,7 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
         ...attendance,
         hoursMap: newHoursMap,
         records: newRecords,
-        settings: { daysPerWeek, schedule, hoursPerWeek, startDate, endDate }
+        settings: { daysPerWeek, schedule, hoursPerWeek: currentHoursPerWeek, startDate, endDate }
       });
     }
     
@@ -672,51 +695,100 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
                       onChange={e => {
                         const val = parseInt(e.target.value);
                         setDaysPerWeek(val);
-                        const newSchedule = [...schedule];
-                        while (newSchedule.length < val) {
-                          newSchedule.push({ dayOfWeek: 1, hours: 1 });
+                        let newSchedule = [...schedule];
+                        if (newSchedule.length > val) {
+                          newSchedule = newSchedule.slice(0, val);
+                        } else {
+                          while (newSchedule.length < val) {
+                            const usedDays = newSchedule.map(s => s.dayOfWeek);
+                            let nextDay = 1;
+                            while (usedDays.includes(nextDay) && nextDay <= 5) nextDay++;
+                            if (nextDay > 5) nextDay = 1;
+                            newSchedule.push({ dayOfWeek: nextDay, hours: 1 });
+                          }
                         }
-                        setSchedule(newSchedule.slice(0, val));
+                        
+                        // Reset hours to distribute currentHoursPerWeek
+                        for (let i = 0; i < newSchedule.length - 1; i++) {
+                          newSchedule[i].hours = 1;
+                        }
+                        const sumOthers = newSchedule.slice(0, -1).reduce((acc, curr) => acc + curr.hours, 0);
+                        newSchedule[newSchedule.length - 1].hours = Math.max(1, currentHoursPerWeek - sumOthers);
+                        
+                        setSchedule(newSchedule);
                       }}
                     >
-                      {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} วัน</option>)}
+                      {[1, 2, 3, 4, 5].filter(n => n <= currentHoursPerWeek).map(n => <option key={n} value={n}>{n} วัน</option>)}
                     </select>
                   </div>
                   
                   <div className="space-y-4 pl-6 border-l-4 border-blue-100 flex flex-col">
-                    {schedule.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                        <span className="w-16 font-medium text-gray-700">วันที่ {idx + 1}:</span>
-                        <select 
-                          className="border border-gray-300 rounded-lg p-2 w-32 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                          value={item.dayOfWeek}
-                          onChange={e => {
-                            const newSchedule = [...schedule];
-                            newSchedule[idx].dayOfWeek = parseInt(e.target.value);
-                            setSchedule(newSchedule);
-                          }}
-                        >
-                          <option value={1}>จันทร์</option>
-                          <option value={2}>อังคาร</option>
-                          <option value={3}>พุธ</option>
-                          <option value={4}>พฤหัสบดี</option>
-                          <option value={5}>ศุกร์</option>
-                        </select>
-                        <span className="text-gray-600">จำนวน</span>
-                        <select 
-                          className="border border-gray-300 rounded-lg p-2 w-24 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                          value={item.hours}
-                          onChange={e => {
-                            const newSchedule = [...schedule];
-                            newSchedule[idx].hours = parseInt(e.target.value);
-                            setSchedule(newSchedule);
-                          }}
-                        >
-                          {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                        <span className="text-gray-600">ชั่วโมง</span>
-                      </div>
-                    ))}
+                    {schedule.map((item, idx) => {
+                      const usedDays = schedule.map(s => s.dayOfWeek);
+                      const isLastDay = idx === schedule.length - 1;
+                      
+                      // Calculate max hours for this day
+                      const sumOthersExceptLastAndIdx = schedule.reduce((acc, curr, i) => {
+                        if (i === idx || i === schedule.length - 1) return acc;
+                        return acc + curr.hours;
+                      }, 0);
+                      const remainingForIdxAndLast = currentHoursPerWeek - sumOthersExceptLastAndIdx;
+                      const maxForIdx = remainingForIdxAndLast - 1; // leave at least 1 for the last day
+                      const hoursOptions = [];
+                      for (let i = 1; i <= Math.max(1, maxForIdx); i++) {
+                        hoursOptions.push(i);
+                      }
+
+                      return (
+                        <div key={idx} className="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                          <span className="w-16 font-medium text-gray-700">วันที่ {idx + 1}:</span>
+                          <select 
+                            className="border border-gray-300 rounded-lg p-2 w-32 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            value={item.dayOfWeek}
+                            onChange={e => {
+                              const newSchedule = [...schedule];
+                              newSchedule[idx].dayOfWeek = parseInt(e.target.value);
+                              setSchedule(newSchedule);
+                            }}
+                          >
+                            {[1, 2, 3, 4, 5].map(day => (
+                              <option 
+                                key={day} 
+                                value={day} 
+                                disabled={usedDays.includes(day) && day !== item.dayOfWeek}
+                              >
+                                {day === 1 ? 'จันทร์' : day === 2 ? 'อังคาร' : day === 3 ? 'พุธ' : day === 4 ? 'พฤหัสบดี' : 'ศุกร์'}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-gray-600">จำนวน</span>
+                          {isLastDay ? (
+                            <div className="border border-gray-200 bg-gray-100 rounded-lg p-2 w-24 text-center text-gray-600 font-medium">
+                              {item.hours}
+                            </div>
+                          ) : (
+                            <select 
+                              className="border border-gray-300 rounded-lg p-2 w-24 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                              value={item.hours}
+                              onChange={e => {
+                                const newSchedule = [...schedule];
+                                newSchedule[idx].hours = parseInt(e.target.value);
+                                // Recalculate last day
+                                const sumOthers = newSchedule.slice(0, -1).reduce((acc, curr) => acc + curr.hours, 0);
+                                newSchedule[newSchedule.length - 1].hours = Math.max(1, currentHoursPerWeek - sumOthers);
+                                setSchedule(newSchedule);
+                              }}
+                            >
+                              {hoursOptions.map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                          )}
+                          <span className="text-gray-600">ชั่วโมง</span>
+                          {isLastDay && schedule.length > 1 && (
+                            <span className="text-sm text-gray-500 ml-2">(คำนวณอัตโนมัติ)</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
                 
@@ -725,19 +797,16 @@ export const StudentsForm: React.FC<Props> = ({ data, generalInfo, attendance, o
                   <h4 className="font-bold text-lg text-gray-800 border-b border-gray-200 pb-3 mb-5">3. เวลาเรียน</h4>
                   <div className="flex items-center gap-4 mb-4">
                     <label className="w-48 text-gray-700 font-medium">เวลาเรียน ชั่วโมง/สัปดาห์:</label>
-                    <select 
-                      className="border border-gray-300 rounded-lg p-2.5 w-32 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
-                      value={hoursPerWeek}
-                      onChange={e => setHoursPerWeek(parseInt(e.target.value))}
-                    >
-                      {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n} ชั่วโมง</option>)}
-                    </select>
+                    <div className="border border-gray-200 bg-gray-50 rounded-lg p-2.5 w-32 text-gray-600 font-medium text-center">
+                      {currentHoursPerWeek} ชั่วโมง
+                    </div>
+                    <span className="text-sm text-gray-500">(อ้างอิงจากข้อมูลหน้าปก)</span>
                   </div>
                   <div className="text-blue-700 bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
                     <div className="bg-blue-100 p-2 rounded-full">
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                     </div>
-                    <span>ระบบคำนวณอัตโนมัติ: เวลาเรียน <strong className="text-lg">{hoursPerWeek * 20}</strong> ชั่วโมง/ภาคเรียน (กำหนด 1 ภาคเรียนมี 20 สัปดาห์)</span>
+                    <span>ระบบคำนวณอัตโนมัติ: เวลาเรียน <strong className="text-lg">{currentTotalHours}</strong> ชั่วโมง/ภาคเรียน (กำหนด 1 ภาคเรียนมี 20 สัปดาห์)</span>
                   </div>
                 </section>
                 

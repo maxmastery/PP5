@@ -695,11 +695,8 @@ export default function App() {
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
-  // Filter datasets for regular users
-  // User says: "ให้แสดงผลชุดข้อมูลว่างเปล่า เป็นค่าเริ่มต้น" for other users.
-  // We'll assume they only see their own data if we had an owner field, 
-  // but since we don't, we'll just show empty for non-admins as requested.
-  const visibleDatasets = currentUser.role === 'admin' ? datasets : datasets.filter(d => d.userId === currentUser.id);
+  // Filter datasets so users (including admins) only see their own data in the dashboard
+  const visibleDatasets = datasets.filter(d => d.userId === currentUser.id);
 
   const handleAddUserByAdmin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1226,6 +1223,7 @@ export default function App() {
                 attendance={data.attendance}
                 onChange={(students) => handleUpdateCurrentData({ ...data, students })}
                 onAttendanceChange={(attendance) => handleUpdateCurrentData({ ...data, attendance })}
+                onGeneralInfoChange={(generalInfo) => handleUpdateCurrentData({ ...data, generalInfo })}
               />
             )}
             {activeTab === 'scores' && (

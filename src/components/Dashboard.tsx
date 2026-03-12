@@ -632,7 +632,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 referrerPolicy="no-referrer"
               />
             </a>
-            <p>TN Smart Grade System V 1.1</p>
+            <p>TN Smart Grade System V 2.0</p>
           </div>
         </footer>
       </main>
