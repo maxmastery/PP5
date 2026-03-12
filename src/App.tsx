@@ -45,36 +45,6 @@ const initialData: AppData = {
   indicators: [],
 };
 
-// Smart Merge function to prevent data loss from concurrent edits
-function mergeEntities<T extends { id: string }>(
-  local: T[],
-  saved: T[],
-  server: T[]
-): T[] {
-  if (local === saved) return server;
-
-  const modified = local.filter(lItem => {
-    const sItem = saved.find(s => s.id === lItem.id);
-    return !sItem || JSON.stringify(lItem) !== JSON.stringify(sItem);
-  });
-  
-  const deletedIds = saved.filter(s => !local.find(l => l.id === s.id)).map(s => s.id);
-
-  let merged = [...server];
-  merged = merged.filter(item => !deletedIds.includes(item.id));
-  
-  modified.forEach(mItem => {
-    const index = merged.findIndex(item => item.id === mItem.id);
-    if (index >= 0) {
-      merged[index] = mItem;
-    } else {
-      merged.push(mItem);
-    }
-  });
-
-  return merged;
-}
-
 const tabs = [
   { id: 'general', label: 'ปก' },
   { id: 'students', label: 'ชื่อ+เวลา1+เวลา2' },
@@ -244,33 +214,17 @@ export default function App() {
       setSyncStatus('saving');
       
       try {
-        // 1. Fetch latest from server
-        const fetchResponse = await fetch(webAppUrl);
-        const fetchText = await fetchResponse.text();
-        const serverData = JSON.parse(fetchText).data;
-
-        const serverDatasets = Array.isArray(serverData.datasets) ? serverData.datasets : [];
-        const serverUsers = Array.isArray(serverData.users) ? serverData.users : [];
-        const serverLogs = Array.isArray(serverData.activityLogs) ? serverData.activityLogs : [];
-        const serverNotifs = Array.isArray(serverData.notifications) ? serverData.notifications : [];
-
-        // 2. Smart Merge
-        const mergedDatasets = mergeEntities(localDatasets, savedDatasets, serverDatasets);
-        const mergedUsers = mergeEntities(localUsers, savedUsers, serverUsers);
-        const mergedLogs = mergeEntities(localLogs, savedLogs, serverLogs);
-        const mergedNotifs = mergeEntities(localNotifs, savedNotifs, serverNotifs);
-
-        // 3. Save to server
+        // 1. Save to server directly (One-way sync from frontend to server)
         const response = await fetch(webAppUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
           body: JSON.stringify({ 
-            datasets: mergedDatasets,
-            users: mergedUsers,
-            activityLogs: mergedLogs,
-            notifications: mergedNotifs
+            datasets: localDatasets,
+            users: localUsers,
+            activityLogs: localLogs,
+            notifications: localNotifs
           }),
         });
 
@@ -278,20 +232,11 @@ export default function App() {
         try {
           const result = JSON.parse(text);
           if (result.status === 'success') {
-            // 4. Update local state with merged data
-            setDatasets(mergedDatasets);
-            latestDatasets.current = mergedDatasets;
-            setUsers(mergedUsers);
-            latestUsers.current = mergedUsers;
-            setActivityLogs(mergedLogs);
-            latestActivityLogs.current = mergedLogs;
-            setNotifications(mergedNotifs);
-            latestNotifications.current = mergedNotifs;
-
-            lastSavedDatasets.current = mergedDatasets;
-            lastSavedUsers.current = mergedUsers;
-            lastSavedActivityLogs.current = mergedLogs;
-            lastSavedNotifications.current = mergedNotifs;
+            // 2. Update last saved references
+            lastSavedDatasets.current = localDatasets;
+            lastSavedUsers.current = localUsers;
+            lastSavedActivityLogs.current = localLogs;
+            lastSavedNotifications.current = localNotifs;
 
             setSyncStatus('saved');
           } else {
@@ -354,10 +299,8 @@ export default function App() {
         textColor = 'text-blue-700';
         break;
       case 'saving':
-        content = <><CloudUpload className="w-4 h-4 mr-2 animate-bounce" /> กำลังซิงค์ข้อมูล...</>;
-        bgColor = 'bg-yellow-50 border-yellow-200';
-        textColor = 'text-yellow-700';
-        break;
+        // Don't show saving status to make UI smoother, only show when saved or error
+        return null;
       case 'saved':
         content = <><CheckCircle2 className="w-4 h-4 mr-2" /> ซิงค์ข้อมูลล่าสุดแล้ว</>;
         bgColor = 'bg-green-50 border-green-200';
@@ -605,52 +548,33 @@ export default function App() {
       isSaving.current = true;
       setSyncStatus('saving');
       try {
-        // 1. Fetch latest from server
-        const fetchResponse = await fetch(webAppUrl);
-        const fetchText = await fetchResponse.text();
-        const serverData = JSON.parse(fetchText).data;
+        const localDatasets = latestDatasets.current;
+        const localUsers = updatedUsers;
+        const localLogs = latestActivityLogs.current;
+        const localNotifs = updatedNotifications;
 
-        const serverDatasets = Array.isArray(serverData.datasets) ? serverData.datasets : [];
-        const serverUsers = Array.isArray(serverData.users) ? serverData.users : [];
-        const serverLogs = Array.isArray(serverData.activityLogs) ? serverData.activityLogs : [];
-        const serverNotifs = Array.isArray(serverData.notifications) ? serverData.notifications : [];
-
-        // 2. Smart Merge
-        const mergedDatasets = mergeEntities(latestDatasets.current, lastSavedDatasets.current, serverDatasets);
-        const mergedUsers = mergeEntities(updatedUsers, lastSavedUsers.current, serverUsers);
-        const mergedLogs = mergeEntities(latestActivityLogs.current, lastSavedActivityLogs.current, serverLogs);
-        const mergedNotifs = mergeEntities(updatedNotifications, lastSavedNotifications.current, serverNotifs);
-
-        // 3. Save to server
+        // 1. Save to server directly (One-way sync from frontend to server)
         const response = await fetch(webAppUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
           body: JSON.stringify({ 
-            datasets: mergedDatasets,
-            users: mergedUsers,
-            activityLogs: mergedLogs,
-            notifications: mergedNotifs
+            datasets: localDatasets,
+            users: localUsers,
+            activityLogs: localLogs,
+            notifications: localNotifs
           }),
         });
 
         const text = await response.text();
         const result = JSON.parse(text);
         if (result.status === 'success') {
-          setDatasets(mergedDatasets);
-          latestDatasets.current = mergedDatasets;
-          setUsers(mergedUsers);
-          latestUsers.current = mergedUsers;
-          setActivityLogs(mergedLogs);
-          latestActivityLogs.current = mergedLogs;
-          setNotifications(mergedNotifs);
-          latestNotifications.current = mergedNotifs;
-
-          lastSavedDatasets.current = mergedDatasets;
-          lastSavedUsers.current = mergedUsers;
-          lastSavedActivityLogs.current = mergedLogs;
-          lastSavedNotifications.current = mergedNotifs;
+          // 2. Update last saved references
+          lastSavedDatasets.current = localDatasets;
+          lastSavedUsers.current = localUsers;
+          lastSavedActivityLogs.current = localLogs;
+          lastSavedNotifications.current = localNotifs;
           
           setSyncStatus('saved');
         } else {
