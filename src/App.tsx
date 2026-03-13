@@ -64,7 +64,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [activeAdminTab, setActiveAdminTab] = useState<'database' | 'approvals' | 'users' | 'logs'>('database');
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxGUSGGIojZOshOxgghBAQoA5WCcd_zvI7ULgaVDK66lCi0BmPSqz5s_kGHSz5BZ0Ha/exec';
+  const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzfIj8ErBSryij3_iR5ZPGh0LFwbchuD9R8QFDqpBr8Zk0RyVqJ77nwGgt289s4BHhy/exec';
   const [currentDatasetId, setCurrentDatasetId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('general');
   const [webAppUrl, setWebAppUrl] = useState<string>(GOOGLE_SHEET_URL);
@@ -183,6 +183,25 @@ export default function App() {
   };
 
   useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasUnsavedChanges = 
+        latestDatasets.current !== lastSavedDatasets.current ||
+        latestUsers.current !== lastSavedUsers.current ||
+        latestActivityLogs.current !== lastSavedActivityLogs.current ||
+        latestNotifications.current !== lastSavedNotifications.current ||
+        isSaving.current;
+
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
     if (!isDataLoaded || !webAppUrl) return;
 
     if (isFirstLoad.current) {
@@ -253,7 +272,7 @@ export default function App() {
       } finally {
         isSaving.current = false;
       }
-    }, 5000);
+    }, 1000); // Check every 1 second for real-time saving
 
     return () => clearInterval(saveInterval);
   }, [isDataLoaded, webAppUrl]);
